@@ -12,13 +12,11 @@ library(tidyverse)
 # read in results tables as defined in script B
 # irrecoverable carbon broken up by ecosystem
 sites_ic <- read_csv("results/FY21_ImpactIndicators_IrrecoverableCarbon_Sites.csv")
-overlaps_ic <- read_csv("results/FY21_ImpactIndicators_IrrecoverableCarbon_Overlaps.csv")
-overlaps_ic_fields <- readRDS("results/FY21_ImpactIndicators_IrrecoverableCarbon_Overlaps.rds")
+overlaps_ic <- readRDS("results/FY21_ImpactIndicators_IrrecoverableCarbon_Overlaps.rds")
 
 # other indicators = population, woody & soil carbon, carbon sequestration potential
 sites_other <- read_csv("results/FY21_ImpactIndicators_Other_Sites.csv")
-overlaps_other <- read_csv("results/FY21_ImpactIndicators_Other_Overlaps.csv")
-overlaps_other_fields <- readRDS("results/FY21_ImpactIndicators_Other_Overlaps.rds")
+overlaps_other <- readRDS("results/FY21_ImpactIndicators_Other_Overlaps.rds")
 
 # note fields are equal within overlapping polygons for country and ci_divsio, but not always for ci_divis_1 or sls s
 
@@ -33,7 +31,7 @@ overlaps_other_fields <- readRDS("results/FY21_ImpactIndicators_Other_Overlaps.r
 # multiply value by (# of overlaps - 1) to account for triple/quadruple/etc counting 
 # and make values negative to easily sum
 # note we only use this for variables we know don't vary within overlapping sites - for example, all overlapping sites are within the same country, but they are not all within the same sls
-overlaps_ic_corrected <- overlaps_ic_fields %>% 
+overlaps_ic_corrected <- overlaps_ic %>% 
   mutate(across(
     .cols = contains("_ic"),
     ~ .x * -(n_overlaps - 1))) %>% 
@@ -48,7 +46,7 @@ ic_summarize <- function(df){
       .groups = "keep") 
 }
 
-overlaps_other_corrected <- overlaps_other_fields %>% 
+overlaps_other_corrected <- overlaps_other %>% 
   mutate(across(
     .cols = c(area_ha, rest_area, population, 
               tstor_woody, tstor_soil, tstor_total, 
@@ -121,6 +119,7 @@ write_csv(country_corrected_other, "results/summaries/ImpactIndicators_CountrySu
 
 
 
+
 #####
 
 ##### Division-level
@@ -187,7 +186,7 @@ sls_sites_ic <- sites_ic %>%
   ic_summarize() %>% 
   ungroup()
 
-sls_overlaps_ic <- overlaps_ic_fields %>% 
+sls_overlaps_ic <- overlaps_ic %>% 
   rowwise() %>% 
   # get a list of duplicated values
   mutate(duplicate_sls = list(ci_sls_1[duplicated(ci_sls_1)])) %>% 
@@ -222,7 +221,7 @@ sls_sites_other <- sites_other %>%
   other_summarize() %>% 
   ungroup()
 
-sls_overlaps_other <- overlaps_other_fields %>% 
+sls_overlaps_other <- overlaps_other %>% 
   rowwise() %>% 
   mutate(duplicate_sls = list(ci_sls_1[duplicated(ci_sls_1)])) %>% 
   ungroup() %>% 
