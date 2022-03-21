@@ -250,13 +250,7 @@ shp_all <- pop_extract_shp %>%
   left_join(woody_extract_shp, by = "ci_id") %>% 
   left_join(soil_extract_shp, by = "ci_id") %>% 
   left_join(seq_extract_shp, by = "ci_id") %>% 
-  dplyr::select(c(ci_id, biome, ci_divisio,
-                  ci_divis_1, country,
-                  new_or_con, new_or_c_1,
-                  ci_sls_1, ci_sls_2, 
-                  area_ha, rest_area,
-                  population, tstor_woody, 
-                  tstor_soil, carbon_seq_potl)) %>% 
+  dplyr::select(!c(country_is, star_tag_t, area_name, comment, star_tag_p, star_tag_s, origin, project_length)) %>% 
   rowwise() %>% 
   mutate(tstor_total = sum(tstor_woody, tstor_soil)) %>% 
   ungroup() %>% 
@@ -280,49 +274,49 @@ write_csv(int_all, "results/FY21_ImpactIndicators_Other_Overlaps.csv")
 # join with field data
 # interested in country, division, sls, site
 fields <- shp_df %>% 
-  dplyr::select(ci_id, country, ci_divisio, ci_divis_1, ci_sls_1, ci_sls_2)
+  dplyr::select(!c(area_ha, country_is, star_tag_t, area_name, comment, star_tag_p, star_tag_s, rest_area, origin, project_length))
 
 int_w_fields <- int_all %>%
-  left_join(fields, by = c("ci_id_1" = "ci_id")) %>%  
-  rename(country_1 = country,
-         ci_div_1 = ci_divisio,
-         ci_div1_1 = ci_divis_1,
-         ci_sls1_1 = ci_sls_1,
-         ci_sls2_1 = ci_sls_2) %>%
+  left_join(fields, by = c("ci_id_1" = "ci_id")) %>% 
+  rename_with(function(x){paste0(x, "_1")}, .cols = biome:ci_end_dat) %>% 
   left_join(fields, by = c("ci_id_2" = "ci_id")) %>% 
-  rename(country_2 = country,
-         ci_div_2 = ci_divisio,
-         ci_div1_2 = ci_divis_1,
-         ci_sls1_2 = ci_sls_1,
-         ci_sls2_2 = ci_sls_2) %>% 
+  rename_with(function(x){paste0(x, "_2")}, .cols = biome:ci_end_dat) %>% 
   left_join(fields, by = c("ci_id_3" = "ci_id")) %>% 
-  rename(country_3 = country,
-         ci_div_3 = ci_divisio,
-         ci_div1_3 = ci_divis_1,
-         ci_sls1_3 = ci_sls_1,
-         ci_sls2_3 = ci_sls_2) %>% 
+  rename_with(function(x){paste0(x, "_3")}, .cols = biome:ci_end_dat) %>% 
   left_join(fields, by = c("ci_id_4" = "ci_id")) %>% 
-  rename(country_4 = country,
-         ci_div_4 = ci_divisio,
-         ci_div1_4 = ci_divis_1,
-         ci_sls1_4 = ci_sls_1,
-         ci_sls2_4 = ci_sls_2) %>% 
+  rename_with(function(x){paste0(x, "_4")}, .cols = biome:ci_end_dat) %>% 
   left_join(fields, by = c("ci_id_5" = "ci_id")) %>% 
-  rename(country_5 = country,
-         ci_div_5 = ci_divisio,
-         ci_div1_5 = ci_divis_1,
-         ci_sls1_5 = ci_sls_1,
-         ci_sls2_5 = ci_sls_2) %>% 
+  rename_with(function(x){paste0(x, "_5")}, .cols = biome:ci_end_dat)  %>% 
   rowwise() %>% 
   mutate(
     ci_id = list(na.omit(c(ci_id_1, ci_id_2, ci_id_3, ci_id_4, ci_id_5))),
+    biome = list(na.omit(c(biome_1, biome_2, biome_3, biome_4, biome_5))),
+    ci_divisio = list(na.omit(c(ci_divisio_1, ci_divisio_2, ci_divisio_3, ci_divisio_4, ci_divisio_5))),
+    ci_divis_1 = list(na.omit(c(ci_divis_1_1, ci_divis_1_2, ci_divis_1_3, ci_divis_1_4, ci_divis_1_5))),
     country = list(na.omit(c(country_1, country_2, country_3, country_4, country_5))),
-    ci_divisio = list(na.omit(c(ci_div_1, ci_div_2, ci_div_3, ci_div_4, ci_div_5))),
-    ci_divis_1 = list(na.omit(c(ci_div1_1, ci_div1_2, ci_div1_3, ci_div1_4, ci_div1_5))),
-    ci_sls_1 = list(na.omit(c(ci_sls1_1, ci_sls1_2, ci_sls1_3, ci_sls1_4, ci_sls1_5))),
-    ci_sls_2 = list(na.omit(c(ci_sls2_1, ci_sls2_2, ci_sls2_3, ci_sls2_4, ci_sls2_5)))) %>% 
+    geographic = list(na.omit(c(geographic_1, geographic_2, geographic_3, geographic_4, geographic_5))),
+    interventi = list(na.omit(c(interventi_1, interventi_2, interventi_3, interventi_4, interventi_5))),
+    interven_1 = list(na.omit(c(interven_1_1, interven_1_2, interven_1_3, interven_1_4, interven_1_5))),
+    interven_2 = list(na.omit(c(interven_2_1, interven_2_2, interven_2_3, interven_2_4, interven_2_5))),
+    gazettemen = list(na.omit(c(gazettemen_1, gazettemen_2, gazettemen_3, gazettemen_4, gazettemen_5))),
+    iucn_categ = list(na.omit(c(iucn_categ_1, iucn_categ_2, iucn_categ_3, iucn_categ_4, iucn_categ_5))),
+    tree_plant = list(na.omit(c(tree_plant_1, tree_plant_2, tree_plant_3, tree_plant_4, tree_plant_5))),
+    restoratio = list(na.omit(c(restoratio_1, restoratio_2, restoratio_3, restoratio_4, restoratio_5))),
+    forest_age = list(na.omit(c(forest_age_1, forest_age_2, forest_age_3, forest_age_4, forest_age_5))),
+    restor_fin = list(na.omit(c(restor_fin_1, restor_fin_2, restor_fin_3, restor_fin_4, restor_fin_5))),
+    local_land = list(na.omit(c(local_land_1, local_land_2, local_land_3, local_land_4, local_land_5))),
+    new_or_con = list(na.omit(c(new_or_con_1, new_or_con_2, new_or_con_3, new_or_con_4, new_or_con_5))),
+    new_or_c_1 = list(na.omit(c(new_or_c_1_1, new_or_c_1_2, new_or_c_1_3, new_or_c_1_4, new_or_c_1_5))),  
+    ci_sls_1 = list(na.omit(c(ci_sls_1_1, ci_sls_1_2, ci_sls_1_3, ci_sls_1_4, ci_sls_1_5))),
+    ci_sls_2 = list(na.omit(c(ci_sls_2_1, ci_sls_2_2, ci_sls_2_3, ci_sls_2_4, ci_sls_2_5))),
+    reporting = list(na.omit(c(reporting_1, reporting_2, reporting_3, reporting_4, reporting_5))),
+    improved_m = list(na.omit(c(improved_m_1, improved_m_2, improved_m_3, improved_m_4, improved_m_5))),
+    ci_start_d = list(na.omit(c(ci_start_d_1, ci_start_d_2, ci_start_d_3, ci_start_d_4, ci_start_d_5))),
+    ci_end_dat = list(na.omit(c(ci_end_dat_1, ci_end_dat_2, ci_end_dat_3, ci_end_dat_4, ci_end_dat_5)))
+    ) %>% 
   ungroup() %>% 
-  dplyr::select(n_overlaps, ci_id, country, ci_divisio, ci_divis_1, ci_sls_1, ci_sls_2,
+  dplyr::select(n_overlaps,
+                colnames(fields),
                 area_ha, rest_area,
                 population, tstor_woody, tstor_soil, tstor_total, carbon_seq_potl)
 
@@ -350,11 +344,12 @@ ic_extract_int <- exact_extract(
 # tidy up and keep relevant, summable values
 # note only returns sites with ic
 ic_shp_tidy <- ic_extract_shp %>% 
-  dplyr::select(c(ci_id, biome, ci_divisio,
-                  ci_divis_1, country,
-                  new_or_con, new_or_c_1,
-                  ci_sls_1, ci_sls_2, 
-                  area_ha, starts_with("sum."))) %>% 
+  dplyr::select(!c(country_is, star_tag_t, area_name, rest_area, comment, star_tag_p, star_tag_s, origin, project_length)) %>% 
+  # dplyr::select(c(ci_id, biome, ci_divisio,
+  #                 ci_divis_1, country,
+  #                 new_or_con, new_or_c_1,
+  #                 ci_sls_1, ci_sls_2, 
+  #                 area_ha, starts_with("sum."))) %>% 
   pivot_longer(cols = starts_with("sum."),
                names_to = "colname",
                values_to = "value") %>% 
@@ -423,46 +418,46 @@ write_csv(ic_int_tidy, "results/FY21_ImpactIndicators_IrrecoverableCarbon_Overla
 
 # add fields of interest
 ic_int_w_fields <- ic_int_tidy %>%
-  left_join(fields, by = c("ci_id_1" = "ci_id")) %>%  
-  rename(country_1 = country,
-         ci_div_1 = ci_divisio,
-         ci_div1_1 = ci_divis_1,
-         ci_sls1_1 = ci_sls_1,
-         ci_sls2_1 = ci_sls_2) %>%
+  left_join(fields, by = c("ci_id_1" = "ci_id")) %>% 
+  rename_with(function(x){paste0(x, "_1")}, .cols = biome:ci_end_dat) %>% 
   left_join(fields, by = c("ci_id_2" = "ci_id")) %>% 
-  rename(country_2 = country,
-         ci_div_2 = ci_divisio,
-         ci_div1_2 = ci_divis_1,
-         ci_sls1_2 = ci_sls_1,
-         ci_sls2_2 = ci_sls_2) %>% 
+  rename_with(function(x){paste0(x, "_2")}, .cols = biome:ci_end_dat) %>% 
   left_join(fields, by = c("ci_id_3" = "ci_id")) %>% 
-  rename(country_3 = country,
-         ci_div_3 = ci_divisio,
-         ci_div1_3 = ci_divis_1,
-         ci_sls1_3 = ci_sls_1,
-         ci_sls2_3 = ci_sls_2) %>% 
+  rename_with(function(x){paste0(x, "_3")}, .cols = biome:ci_end_dat) %>% 
   left_join(fields, by = c("ci_id_4" = "ci_id")) %>% 
-  rename(country_4 = country,
-         ci_div_4 = ci_divisio,
-         ci_div1_4 = ci_divis_1,
-         ci_sls1_4 = ci_sls_1,
-         ci_sls2_4 = ci_sls_2) %>% 
+  rename_with(function(x){paste0(x, "_4")}, .cols = biome:ci_end_dat) %>% 
   left_join(fields, by = c("ci_id_5" = "ci_id")) %>% 
-  rename(country_5 = country,
-         ci_div_5 = ci_divisio,
-         ci_div1_5 = ci_divis_1,
-         ci_sls1_5 = ci_sls_1,
-         ci_sls2_5 = ci_sls_2) %>% 
+  rename_with(function(x){paste0(x, "_5")}, .cols = biome:ci_end_dat)  %>% 
   rowwise() %>% 
   mutate(
     ci_id = list(na.omit(c(ci_id_1, ci_id_2, ci_id_3, ci_id_4, ci_id_5))),
+    biome = list(na.omit(c(biome_1, biome_2, biome_3, biome_4, biome_5))),
+    ci_divisio = list(na.omit(c(ci_divisio_1, ci_divisio_2, ci_divisio_3, ci_divisio_4, ci_divisio_5))),
+    ci_divis_1 = list(na.omit(c(ci_divis_1_1, ci_divis_1_2, ci_divis_1_3, ci_divis_1_4, ci_divis_1_5))),
     country = list(na.omit(c(country_1, country_2, country_3, country_4, country_5))),
-    ci_divisio = list(na.omit(c(ci_div_1, ci_div_2, ci_div_3, ci_div_4, ci_div_5))),
-    ci_divis_1 = list(na.omit(c(ci_div1_1, ci_div1_2, ci_div1_3, ci_div1_4, ci_div1_5))),
-    ci_sls_1 = list(na.omit(c(ci_sls1_1, ci_sls1_2, ci_sls1_3, ci_sls1_4, ci_sls1_5))),
-    ci_sls_2 = list(na.omit(c(ci_sls2_1, ci_sls2_2, ci_sls2_3, ci_sls2_4, ci_sls2_5)))) %>% 
+    geographic = list(na.omit(c(geographic_1, geographic_2, geographic_3, geographic_4, geographic_5))),
+    interventi = list(na.omit(c(interventi_1, interventi_2, interventi_3, interventi_4, interventi_5))),
+    interven_1 = list(na.omit(c(interven_1_1, interven_1_2, interven_1_3, interven_1_4, interven_1_5))),
+    interven_2 = list(na.omit(c(interven_2_1, interven_2_2, interven_2_3, interven_2_4, interven_2_5))),
+    gazettemen = list(na.omit(c(gazettemen_1, gazettemen_2, gazettemen_3, gazettemen_4, gazettemen_5))),
+    iucn_categ = list(na.omit(c(iucn_categ_1, iucn_categ_2, iucn_categ_3, iucn_categ_4, iucn_categ_5))),
+    tree_plant = list(na.omit(c(tree_plant_1, tree_plant_2, tree_plant_3, tree_plant_4, tree_plant_5))),
+    restoratio = list(na.omit(c(restoratio_1, restoratio_2, restoratio_3, restoratio_4, restoratio_5))),
+    forest_age = list(na.omit(c(forest_age_1, forest_age_2, forest_age_3, forest_age_4, forest_age_5))),
+    restor_fin = list(na.omit(c(restor_fin_1, restor_fin_2, restor_fin_3, restor_fin_4, restor_fin_5))),
+    local_land = list(na.omit(c(local_land_1, local_land_2, local_land_3, local_land_4, local_land_5))),
+    new_or_con = list(na.omit(c(new_or_con_1, new_or_con_2, new_or_con_3, new_or_con_4, new_or_con_5))),
+    new_or_c_1 = list(na.omit(c(new_or_c_1_1, new_or_c_1_2, new_or_c_1_3, new_or_c_1_4, new_or_c_1_5))),  
+    ci_sls_1 = list(na.omit(c(ci_sls_1_1, ci_sls_1_2, ci_sls_1_3, ci_sls_1_4, ci_sls_1_5))),
+    ci_sls_2 = list(na.omit(c(ci_sls_2_1, ci_sls_2_2, ci_sls_2_3, ci_sls_2_4, ci_sls_2_5))),
+    reporting = list(na.omit(c(reporting_1, reporting_2, reporting_3, reporting_4, reporting_5))),
+    improved_m = list(na.omit(c(improved_m_1, improved_m_2, improved_m_3, improved_m_4, improved_m_5))),
+    ci_start_d = list(na.omit(c(ci_start_d_1, ci_start_d_2, ci_start_d_3, ci_start_d_4, ci_start_d_5))),
+    ci_end_dat = list(na.omit(c(ci_end_dat_1, ci_end_dat_2, ci_end_dat_3, ci_end_dat_4, ci_end_dat_5)))
+  ) %>% 
   ungroup() %>% 
-  dplyr::select(n_overlaps, ci_id, country, ci_divisio, ci_divis_1, ci_sls_1, ci_sls_2,
+  dplyr::select(n_overlaps, 
+                colnames(fields),
                 ecosystem, tstor_ic, ha_high_ic, ha_ic, tonnes_ha_ic, tstor_blue_ic)
 
 
