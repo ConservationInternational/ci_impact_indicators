@@ -20,7 +20,7 @@ sites_other <- read_csv("results/FY21_ImpactIndicators_Other_Sites.csv")
 overlaps_other <- read_csv("results/FY21_ImpactIndicators_Other_Overlaps.csv")
 overlaps_other_fields <- readRDS("results/FY21_ImpactIndicators_Other_Overlaps.rds")
 
-# note fields are equal within polygons for country and ci_divsio, but not always for ci_divis_1 or sls s
+# note fields are equal within overlapping polygons for country and ci_divsio, but not always for ci_divis_1 or sls s
 
 
 #####
@@ -28,10 +28,11 @@ overlaps_other_fields <- readRDS("results/FY21_ImpactIndicators_Other_Overlaps.r
 ##### Tidy and define functions
 #####
 
-# irecoverable carbon
+# Irrecoverable carbon
 # create csv for aggregating all sites
 # multiply value by (# of overlaps - 1) to account for triple/quadruple/etc counting 
 # and make values negative to easily sum
+# note we only use this for variables we know don't vary within overlapping sites - for example, all overlapping sites are within the same country, but they are not all within the same sls
 overlaps_ic_corrected <- overlaps_ic_fields %>% 
   mutate(across(
     .cols = contains("_ic"),
@@ -177,7 +178,7 @@ write_csv(division_corrected_other, "results/summaries/ImpactIndicators_Division
 ##### SlS-level
 #####
 
-# sls is complicated because there are overlapping sites with different sls values
+# sls is more complicated because there are overlapping sites with different sls values
 
 # irrecoverable carbon
 
@@ -185,9 +186,6 @@ sls_sites_ic <- sites_ic %>%
   group_by(ci_sls_1, ecosystem) %>% 
   ic_summarize() %>% 
   ungroup()
-
-# drop those with more than one sls - means that the overlap isn't a problem
-# filter(length(ci_sls_1) = length(unique(ci_sls_1)) == 1)
 
 sls_overlaps_ic <- overlaps_ic_fields %>% 
   rowwise() %>% 
@@ -202,7 +200,8 @@ sls_overlaps_ic <- overlaps_ic_fields %>%
   mutate(across(
     .cols = contains("_ic"),
     ~ .x * -length(duplicate_sls))) %>% 
-  mutate(ci_sls_1 = unique(duplicate_sls)) %>% # using duplicated[] already accounts for the -1
+  mutate(ci_sls_1 = unique(duplicate_sls)) %>% 
+  # using duplicated[] already accounts for the -1
   ungroup() %>% 
   group_by(ci_sls_1, ecosystem) %>% 
   ic_summarize() %>% 
@@ -253,8 +252,8 @@ write_csv(sls_corrected_other, "results/summaries/ImpactIndicators_SLSSummary_Ot
 ##### Site-level
 #####
 
-# overlaps don't matter at site level
-# due to that, note can't sum for total (or will have overlaps)
+# overlaps don't occur at site level
+# due to that, note can't sum for total (or will have double counting)
 
 write_csv(sites_ic, "results/summaries/ImpactIndicators_SiteSummary_IC.csv")
 write_csv(sites_other, "results/summaries/ImpactIndicators_SiteSummary_OtherIndicators.csv")
