@@ -35,8 +35,7 @@ carbon_soil <- rast("data/carbon_stored/OCSTHA_30cm_1km.tif")
 
 
 ### population
-pop <- rast("data/population/ppp_2010_1km_Aggregated.tif") 
-
+pop <- rast("data/population/ppp_2020_1km_Aggregated.tif") 
 
 
 ### carbon sequestration potential
@@ -54,11 +53,18 @@ seq <- rast("data/carbon_sequestration/carbon_sequestration_potl_stack.tif")
 # ignore errors around spherical geometries
 sf::sf_use_s2(FALSE)
 
+
+# join to Howard's intervention categories
+inter_codes <- read_csv("misc/intervention_lookup.csv") %>% 
+  dplyr::select(!id) %>% 
+  rename(interventi = intervention_type,
+         inter_cat = intervention_category)
+
 # site polygons with site-level info
 # removed wwf, bna, & slw sites by request
 # removed proposed PAs by request
 # calculated project length as beggining > end, and if no end then used today [[need to verify]]
-adjusted_end_date <- as.Date("2022-03-18")
+adjusted_end_date <- as.Date("2022-12-31")
 
 shp <- read_sf(
   dsn = "data/ci_sites",
@@ -69,7 +75,9 @@ shp <- read_sf(
                      adjusted_end_date, 
                      ci_end_dat), 
              ci_start_d), "years")) %>% 
-  ungroup()
+  ungroup() %>% 
+  left_join(inter_codes, by = "interventi") %>% 
+  relocate(inter_cat, .before = interventi)
 
 # remove geometries for faster df 
 shp_df <- shp %>% st_drop_geometry()
@@ -126,14 +134,20 @@ woody_extract_shp <- exact_extract(
   y = shp,
   fun = "sum",
   append_cols = "ci_id") %>% 
-  rename("tstor_woody" = sum)
+  rename("tstor_woody" = sum) %>% 
+  rowwise() %>% 
+  mutate(tstor_woody = tstor_woody/2) %>% # adjustment for missing a step in data prep
+  ungroup()
 
 woody_extract_int <- exact_extract(
   x = carbon_woody,
   y = int,
   fun = "sum",
   append_cols = c("origins")) %>% 
-  rename("tstor_woody" = sum)
+  rename("tstor_woody" = sum) %>% 
+  rowwise() %>% 
+  mutate(tstor_woody = tstor_woody/2) %>% 
+  ungroup()
 
 
 
@@ -144,26 +158,25 @@ woody_extract_int <- exact_extract(
 seq_extract_shp <- exact_extract(
   x = seq,
   y = shp,
-  fun = "sum",
-  append_cols = c("ci_id", "restoratio", "ci_end_dat", "ci_start_d", "project_length")) %>%
+  fun = "mean",
+  append_cols = c("ci_id", "area_ha", "restoratio", "ci_end_dat", "ci_start_d", "project_length")) %>%  
   rowwise() %>%
   mutate(carbon_seq_potl = case_when(
-    restoratio == "Agroforestry" & project_length < 20 ~ sum.agfor0020,
-    restoratio == "Agroforestry" & project_length >= 20 ~ sum.agfor2060,
-    restoratio == "Mangrove Shrub Restoration" & project_length < 20 ~ sum.mshrr0020,
-    restoratio == "Mangrove Shrub Restoration" & project_length >= 20 ~ sum.mshrr2060,
-    restoratio == "Mangrove Tree Restoration" & project_length < 20 ~ sum.mtrer0020,
-    restoratio == "Mangrove Tree Restoration" & project_length >= 20 ~ sum.mtrer2060,
-    restoratio == "Natural Regeneration" & project_length < 20 ~ sum.natre0020,
-    restoratio == "Natural Regeneration" & project_length >= 20 ~ sum.natre2060,
-    restoratio == "Plantations & Woodlots - Eucalyptus" ~ sum.pweuc0020,
-    restoratio == "Plantations & Woodlots - Mixed 50/50" ~ sum.pwobr0020, 
-    restoratio == "Enrichment Planting/Assisted Natural Regeneration" ~ sum.natre0020,
-    restoratio == "Rangeland Restoration - Planned Grazing" ~ sum.agfor0020 * 0.15,
-    restoratio == "Seed Dispersal" ~ sum.natre0020 * 0.6
+    restoratio == "Agroforestry" & project_length < 20 ~ mean.agfor0020,
+    restoratio == "Agroforestry" & project_length >= 20 ~ mean.agfor2060,
+    restoratio == "Mangrove Shrub Restoration" & project_length < 20 ~ mean.mshrr0020,
+    restoratio == "Mangrove Shrub Restoration" & project_length >= 20 ~ mean.mshrr2060,
+    restoratio == "Mangrove Tree Restoration" & project_length < 20 ~ mean.mtrer0020,
+    restoratio == "Mangrove Tree Restoration" & project_length >= 20 ~ mean.mtrer2060,
+    restoratio == "Natural Regeneration" & project_length < 20 ~ mean.natre0020,
+    restoratio == "Natural Regeneration" & project_length >= 20 ~ mean.natre2060,
+    restoratio == "Plantations & Woodlots - Eucalyptus" ~ mean.pweuc0020,
+    restoratio == "Plantations & Woodlots - Mixed 50/50" ~ mean.pwobr0020, 
+    restoratio == "Enrichment Planting/Assisted Natural Regeneration" ~ mean.natre0020,
+    restoratio == "Rangeland Restoration - Planned Grazing" ~ 3.67,
+    restoratio == "Seed Dispersal" ~ mean.natre0020 * 0.6
   )) %>%
-  mutate(carbon_seq_potl = carbon_seq_potl * project_length * 3.67) %>%  
-  # CSA defined annual rate as 1 ton C/year, scaling to CO2 eq
+  mutate(carbon_seq_potl = carbon_seq_potl * area_ha) %>% 
   ungroup() %>% 
   dplyr::select(ci_id, carbon_seq_potl)
 
@@ -201,44 +214,45 @@ int_rest <- int %>%
 seq_extract_int <- exact_extract(
   x = seq,
   y = int_rest,
-  fun = "sum",
+  fun = "mean",
   append_cols = colnames(int_rest)
 )  %>%
   rowwise() %>%
   mutate(seq_potl_1 = case_when(
-    rest_1 == "Agroforestry" & length_1 < 20 ~ sum.agfor0020,
-    rest_1 == "Agroforestry" & length_1 >= 20 ~ sum.agfor2060,
-    rest_1 == "Mangrove Shrub Restoration" & length_1 < 20 ~ sum.mshrr0020,
-    rest_1 == "Mangrove Shrub Restoration" & length_1 >= 20 ~ sum.mshrr2060,
-    rest_1 == "Mangrove Tree Restoration" & length_1 < 20 ~ sum.mtrer0020,
-    rest_1 == "Mangrove Tree Restoration" & length_1 >= 20 ~ sum.mtrer2060,
-    rest_1 == "Natural Regeneration" & length_1 < 20 ~ sum.natre0020,
-    rest_1 == "Natural Regeneration" & length_1 >= 20 ~ sum.natre2060,
-    rest_1 == "Plantations & Woodlots - Eucalyptus" ~ sum.pweuc0020,
-    rest_1 == "Plantations & Woodlots - Mixed 50/50" ~ sum.pwobr0020, 
-    rest_1 == "Enrichment Planting/Assisted Natural Regeneration" ~ sum.natre0020,
-    rest_1 == "Rangeland Restoration - Planned Grazing" ~ sum.agfor0020 * 0.15,
-    rest_1 == "Seed Dispersal" ~ sum.natre0020 * 0.6
+    rest_1 == "Agroforestry" & length_1 < 20 ~ mean.agfor0020,
+    rest_1 == "Agroforestry" & length_1 >= 20 ~ mean.agfor2060,
+    rest_1 == "Mangrove Shrub Restoration" & length_1 < 20 ~ mean.mshrr0020,
+    rest_1 == "Mangrove Shrub Restoration" & length_1 >= 20 ~ mean.mshrr2060,
+    rest_1 == "Mangrove Tree Restoration" & length_1 < 20 ~ mean.mtrer0020,
+    rest_1 == "Mangrove Tree Restoration" & length_1 >= 20 ~ mean.mtrer2060,
+    rest_1 == "Natural Regeneration" & length_1 < 20 ~ mean.natre0020,
+    rest_1 == "Natural Regeneration" & length_1 >= 20 ~ mean.natre2060,
+    rest_1 == "Plantations & Woodlots - Eucalyptus" ~ mean.pweuc0020,
+    rest_1 == "Plantations & Woodlots - Mixed 50/50" ~ mean.pwobr0020, 
+    rest_1 == "Enrichment Planting/Assisted Natural Regeneration" ~ mean.natre0020,
+    rest_1 == "Rangeland Restoration - Planned Grazing" ~ 3.67,
+    rest_1 == "Seed Dispersal" ~ mean.natre0020 * 0.6
   )) %>%
-  mutate(seq_potl_1 = seq_potl_1 * length_1 * 3.67) %>% 
+  mutate(seq_potl_1 = seq_potl_1) %>% 
   mutate(seq_potl_2 = case_when(
-    rest_2 == "Agroforestry" & length_2 < 20 ~ sum.agfor0020,
-    rest_2 == "Agroforestry" & length_2 >= 20 ~ sum.agfor2060,
-    rest_2 == "Mangrove Shrub Restoration" & length_2 < 20 ~ sum.mshrr0020,
-    rest_2 == "Mangrove Shrub Restoration" & length_2 >= 20 ~ sum.mshrr2060,
-    rest_2 == "Mangrove Tree Restoration" & length_2 < 20 ~ sum.mtrer0020,
-    rest_2 == "Mangrove Tree Restoration" & length_2 >= 20 ~ sum.mtrer2060,
-    rest_2 == "Natural Regeneration" & length_2 < 20 ~ sum.natre0020,
-    rest_2 == "Natural Regeneration" & length_2 >= 20 ~ sum.natre2060,
-    rest_2 == "Plantations & Woodlots - Eucalyptus" ~ sum.pweuc0020,
-    rest_2 == "Plantations & Woodlots - Mixed 50/50" ~ sum.pwobr0020, 
-    rest_2 == "Enrichment Planting/Assisted Natural Regeneration" ~ sum.natre0020,
-    rest_2 == "Rangeland Restoration - Planned Grazing" ~ sum.agfor0020 * 0.15,
-    rest_2 == "Seed Dispersal" ~ sum.natre0020 * 0.6
+    rest_2 == "Agroforestry" & length_2 < 20 ~ mean.agfor0020,
+    rest_2 == "Agroforestry" & length_2 >= 20 ~ mean.agfor2060,
+    rest_2 == "Mangrove Shrub Restoration" & length_2 < 20 ~ mean.mshrr0020,
+    rest_2 == "Mangrove Shrub Restoration" & length_2 >= 20 ~ mean.mshrr2060,
+    rest_2 == "Mangrove Tree Restoration" & length_2 < 20 ~ mean.mtrer0020,
+    rest_2 == "Mangrove Tree Restoration" & length_2 >= 20 ~ mean.mtrer2060,
+    rest_2 == "Natural Regeneration" & length_2 < 20 ~ mean.natre0020,
+    rest_2 == "Natural Regeneration" & length_2 >= 20 ~ mean.natre2060,
+    rest_2 == "Plantations & Woodlots - Eucalyptus" ~ mean.pweuc0020,
+    rest_2 == "Plantations & Woodlots - Mixed 50/50" ~ mean.pwobr0020, 
+    rest_2 == "Enrichment Planting/Assisted Natural Regeneration" ~ mean.natre0020,
+    rest_2 == "Rangeland Restoration - Planned Grazing" ~ 3.67,
+    rest_2 == "Seed Dispersal" ~ mean.natre0020 * 0.6
   )) %>%
-  mutate(seq_potl_2 = seq_potl_2 * length_2 * 3.67) %>% 
+  mutate(seq_potl_2 = seq_potl_2) %>% 
   mutate(carbon_seq_potl = min(seq_potl_1, seq_potl_2),
          rest_area = min(rest_area_1, rest_area_2)) %>% 
+  mutate(carbon_seq_potl = carbon_seq_potl * area_ha) %>% 
   # CSA defined annual rate as 1 ton C/year, scaling to CO2 eq
   ungroup() %>% 
   filter(!carbon_seq_potl == Inf) %>% # dropping bc means rest has NA
@@ -258,6 +272,7 @@ shp_all <- pop_extract_shp %>%
 
 write_csv(shp_all, "results/FY21_ImpactIndicators_Other_Sites.csv")
 
+
 int_all <- pop_extract_int %>% 
   left_join(woody_extract_int, by = "origins") %>% 
   left_join(soil_extract_int, by = c("origins")) %>% 
@@ -269,7 +284,6 @@ int_all <- pop_extract_int %>%
   relocate(rest_area, .before = population) %>% 
   relocate(tstor_total, .before = carbon_seq_potl)
 
-write_csv(int_all, "results/FY21_ImpactIndicators_Other_Overlaps.csv")
 
 # join with field data
 # interested in country, division, sls, site
@@ -295,6 +309,7 @@ int_w_fields <- int_all %>%
     ci_divis_1 = list(na.omit(c(ci_divis_1_1, ci_divis_1_2, ci_divis_1_3, ci_divis_1_4, ci_divis_1_5))),
     country = list(na.omit(c(country_1, country_2, country_3, country_4, country_5))),
     geographic = list(na.omit(c(geographic_1, geographic_2, geographic_3, geographic_4, geographic_5))),
+    inter_cat = list(na.omit(c(inter_cat_1, inter_cat_2, inter_cat_3, inter_cat_4, inter_cat_5))),
     interventi = list(na.omit(c(interventi_1, interventi_2, interventi_3, interventi_4, interventi_5))),
     interven_1 = list(na.omit(c(interven_1_1, interven_1_2, interven_1_3, interven_1_4, interven_1_5))),
     interven_2 = list(na.omit(c(interven_2_1, interven_2_2, interven_2_3, interven_2_4, interven_2_5))),
@@ -414,7 +429,6 @@ ic_int_tidy <- ic_extract_int %>%
   filter(!tstor_ic == 0) %>% 
   dplyr::select(!c(area_ha)) 
 
-write_csv(ic_int_tidy, "results/FY21_ImpactIndicators_IrrecoverableCarbon_Overlaps.csv")
 
 # add fields of interest
 ic_int_w_fields <- ic_int_tidy %>%
@@ -436,6 +450,7 @@ ic_int_w_fields <- ic_int_tidy %>%
     ci_divis_1 = list(na.omit(c(ci_divis_1_1, ci_divis_1_2, ci_divis_1_3, ci_divis_1_4, ci_divis_1_5))),
     country = list(na.omit(c(country_1, country_2, country_3, country_4, country_5))),
     geographic = list(na.omit(c(geographic_1, geographic_2, geographic_3, geographic_4, geographic_5))),
+    inter_cat = list(na.omit(c(inter_cat_1, inter_cat_2, inter_cat_3, inter_cat_4, inter_cat_5))),
     interventi = list(na.omit(c(interventi_1, interventi_2, interventi_3, interventi_4, interventi_5))),
     interven_1 = list(na.omit(c(interven_1_1, interven_1_2, interven_1_3, interven_1_4, interven_1_5))),
     interven_2 = list(na.omit(c(interven_2_1, interven_2_2, interven_2_3, interven_2_4, interven_2_5))),
@@ -459,6 +474,5 @@ ic_int_w_fields <- ic_int_tidy %>%
   dplyr::select(n_overlaps, 
                 colnames(fields),
                 ecosystem, tstor_ic, ha_high_ic, ha_ic, tonnes_ha_ic, tstor_blue_ic)
-
 
 saveRDS(ic_int_w_fields, "results/FY21_ImpactIndicators_IrrecoverableCarbon_Overlaps.rds")

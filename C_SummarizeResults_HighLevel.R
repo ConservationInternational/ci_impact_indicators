@@ -11,8 +11,10 @@ library(tidyverse)
 
 # read in results tables as defined in script B
 # irrecoverable carbon broken up by ecosystem
-sites_ic <- read_csv("results/FY21_ImpactIndicators_IrrecoverableCarbon_Sites.csv")
-overlaps_ic <- readRDS("results/FY21_ImpactIndicators_IrrecoverableCarbon_Overlaps.rds")
+sites_ic <- read_csv("results/FY21_ImpactIndicators_IrrecoverableCarbon_Sites.csv") %>%
+  dplyr::select(!tonnes_ha_ic) # can't sum
+overlaps_ic <- readRDS("results/FY21_ImpactIndicators_IrrecoverableCarbon_Overlaps.rds") %>%
+  dplyr::select(!tonnes_ha_ic) # can't sum
 
 # other indicators = population, woody & soil carbon, carbon sequestration potential
 sites_other <- read_csv("results/FY21_ImpactIndicators_Other_Sites.csv")
@@ -182,14 +184,14 @@ write_csv(division_corrected_other, "results/summaries/ImpactIndicators_Division
 # irrecoverable carbon
 
 sls_sites_ic <- sites_ic %>% 
-  group_by(ci_sls_1, ecosystem) %>% 
+  group_by(ci_sls_2, ecosystem) %>% 
   ic_summarize() %>% 
   ungroup()
 
 sls_overlaps_ic <- overlaps_ic %>% 
   rowwise() %>% 
   # get a list of duplicated values
-  mutate(duplicate_sls = list(ci_sls_1[duplicated(ci_sls_1)])) %>% 
+  mutate(duplicate_sls = list(ci_sls_2[duplicated(ci_sls_2)])) %>% 
   ungroup() %>% 
   # remove those without any duplicates 
   # (i.e. birds head & west papua have some overlaps that aren't double counting when we group by sls)
@@ -199,16 +201,16 @@ sls_overlaps_ic <- overlaps_ic %>%
   mutate(across(
     .cols = contains("_ic"),
     ~ .x * -length(duplicate_sls))) %>% 
-  mutate(ci_sls_1 = unique(duplicate_sls)) %>% 
+  mutate(ci_sls_2 = unique(duplicate_sls)) %>% 
   # using duplicated[] already accounts for the -1
   ungroup() %>% 
-  group_by(ci_sls_1, ecosystem) %>% 
+  group_by(ci_sls_2, ecosystem) %>% 
   ic_summarize() %>% 
   ungroup()
 
 sls_corrected_ic <- sls_sites_ic %>% 
   bind_rows(sls_overlaps_ic) %>% 
-  group_by(ci_sls_1, ecosystem) %>% 
+  group_by(ci_sls_2, ecosystem) %>% 
   ic_summarize() %>% 
   ungroup()
 
@@ -217,13 +219,13 @@ write_csv(sls_corrected_ic, "results/summaries/ImpactIndicators_SLSSummary_IC.cs
 # other indicators
 
 sls_sites_other <- sites_other %>% 
-  group_by(ci_sls_1) %>% 
+  group_by(ci_sls_2) %>% 
   other_summarize() %>% 
   ungroup()
 
 sls_overlaps_other <- overlaps_other %>% 
   rowwise() %>% 
-  mutate(duplicate_sls = list(ci_sls_1[duplicated(ci_sls_1)])) %>% 
+  mutate(duplicate_sls = list(ci_sls_2[duplicated(ci_sls_2)])) %>% 
   ungroup() %>% 
   filter(!duplicate_sls == "character(0)") %>% 
   rowwise() %>% 
@@ -232,15 +234,15 @@ sls_overlaps_other <- overlaps_other %>%
               tstor_woody, tstor_soil, tstor_total, 
               carbon_seq_potl),
     ~ .x * -length(duplicate_sls))) %>% 
-  mutate(ci_sls_1 = unique(duplicate_sls)) %>% 
+  mutate(ci_sls_2 = unique(duplicate_sls)) %>% 
   ungroup() %>% 
-  group_by(ci_sls_1) %>% 
+  group_by(ci_sls_2) %>% 
   other_summarize() %>% 
   ungroup()
 
 sls_corrected_other <- sls_sites_other %>% 
   bind_rows(sls_overlaps_other) %>% 
-  group_by(ci_sls_1) %>% 
+  group_by(ci_sls_2) %>% 
   other_summarize() %>% 
   ungroup()
 
@@ -256,3 +258,5 @@ write_csv(sls_corrected_other, "results/summaries/ImpactIndicators_SLSSummary_Ot
 
 write_csv(sites_ic, "results/summaries/ImpactIndicators_SiteSummary_IC.csv")
 write_csv(sites_other, "results/summaries/ImpactIndicators_SiteSummary_OtherIndicators.csv")
+
+

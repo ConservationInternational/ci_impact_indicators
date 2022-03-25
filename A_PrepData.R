@@ -33,10 +33,12 @@ for (i in seq_along(tiles)){
   gfw_file <- gfw_files[i]
   gfw_agb <- rast(gfw_file)
   bgb <- 0.489 * gfw_agb^(0.89) # calculate below-ground biomass based on Mokany formula
-  bio <- gfw_agb + bgb # add above-ground and below-ground for total biomass)
+  bio <- sum(gfw_agb, bgb, na.rm = TRUE) 
+  # add above-ground and below-ground for total biomass)
+  # convert to carbon equilavent (*0.5) to get Total Carbon 
+  ## NOTE instead of * 0.5 I divde by 2 in the B: extract data script
   
   # forest loss from hansen
-  # hansen_url <- urls[which(str_detect(urls, tile))]
   hansen_url <- paste0("https://storage.googleapis.com/earthenginepartners-hansen/GFC-2020-v1.8/Hansen_GFC-2020-v1.8_lossyear_", tile, ".tif")
   download.file(
     url = hansen_url, 
@@ -175,7 +177,8 @@ for (i in 1:nlyr(ic_stack)){
 ##### Population
 #####
 
-
+# Global mosaic of worldpop population count for 2020
+# no prep needed
 
 
 
@@ -214,10 +217,7 @@ for (i in seq_along(vars)){
 names(seq_stack) <- vars
 
 writeRaster(seq_stack, 
-            "carbon_sequestration_potl_stack.tif", overwrite = TRUE)
-
-
-
+            "data/carbon_sequestration/carbon_sequestration_potl_stack.tif", overwrite = TRUE)
 
 
 #####
@@ -328,45 +328,3 @@ int <- readRDS("data/ci_sites/FY2021_Overlaps.rds") %>%
 
 saveRDS(int, "data/ci_sites/FY2021_Overlaps_Clean.rds")
 
-
-
-
-
-
-
-
-
-
-
-
-
-# 
-# gfw_files <- list.files("misc/woody_tiles_30m",
-#                         full.names = TRUE)
-# tiles <- str_sub(gfw_files, start = 22, end = -5)
-# 
-# # read in each raster and aggregate to 300
-# # then store in a list
-# rast_list <- c()
-# 
-# for(i in seq_along(tiles)){
-#   file <- tiles[i]
-#   tile <- str_sub(file, start = 22, end = -5)
-#   print(tile)
-#   rast_30 <- rast(file)
-#   rast_300 <- rast_30 %>% 
-#     terra::aggregate(fact = 10)
-#   rast_list[[i]] <- rast_300
-# }
-# 
-# # create a spat raster collection of the 300m rasters in the list
-# rsrc <- src(rast_list)
-# 
-# # mosaic all together
-# gfw_300m <- mosaic(
-#   rsrc
-# )
-# 
-# writeRaster(
-#   gfw_300m,
-#   "misc/woody_tiles_300m/gfw_300m_tileswsites.tif")
