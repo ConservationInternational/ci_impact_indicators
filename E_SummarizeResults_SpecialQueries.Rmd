@@ -26,6 +26,11 @@ other_summarize <- function(df){
       sum, na.rm = TRUE),
       .groups = "keep") 
 }
+
+vars <- c(
+  "country",
+  "ci_divisio",
+  "ci_sls_2")
 ```
 
 ## 1. Southern Cross Area Under Restoration
@@ -35,7 +40,6 @@ other_summarize <- function(df){
 * Use the CI start date column - should not include anything before 2017 (prior to SC)
 
 ```{r, Southern Cross Area Under Restoration}
-vars <- c("ci_sls_2", "country")
 
 for (v in seq_along(vars)){
   
@@ -54,7 +58,8 @@ for (v in seq_along(vars)){
   
   remove_ids <- sites %>% 
     filter(ci_start_d < as.Date('2017-01-01') | restoratio == "Not Applicable") %>% 
-    pluck("ci_id")
+    pluck("ci_id") %>% 
+    unique()
   
   # summarize overlaps
   overlaps_summary <- overlaps %>% 
@@ -122,7 +127,6 @@ for (v in seq_along(vars)){
 
 
 ```{r, Southern Cross Potential Sequestration}
-vars <- c("ci_sls_2", "country")
 
 for (v in seq_along(vars)){
   
@@ -159,7 +163,8 @@ for (v in seq_along(vars)){
       T ~ "remove"
     )) %>% 
     filter(remove == "remove") %>% 
-    pluck("ci_id")
+    pluck("ci_id") %>% 
+    unique()
   
   # summarize overlaps
   overlaps_summary <- overlaps %>% 
@@ -229,9 +234,78 @@ for (v in seq_along(vars)){
     + OR Improved Management Column = Include all options with “yes” in the selection (ex. “Yes, staff increased”); Remove - Blanks and Not Applicable 
     + CI Division - Do not include anything tagged as “C4O - Blue Nature Alliance” 
 
+* New Marine Protected Area 
+    + Biome Column = Marine; Terrestrial + Marine 
+    + Intervention Type= Protected Area (Note: please do not include Protected Area – Proposed) 
+    + Gazettement Date= Should fall within FY21 (July 1 2020 – June 30 2021) 
+    + CI Division - Do not include anything tagged as “C4O - Blue Nature Alliance” 
+
+* Marine Protected Area with Improved Management Activities 
+    + Biome Column = Marine; Terrestrial + Marine 
+    + Intervention Type = Protected Area (Note: please do not include Protected Area – Proposed) 
+    + Improved Management Column = Include all options with “yes” in the selection (ex. “Yes, staff increased”); Remove - Blanks and Not Applicable 
+    + CI Division - Do not include anything tagged as “C4O - Blue Nature Alliance” 
+
 
 
 ```{r, Southern Cross Marine Protected Area}
 
+for (v in seq_along(vars)){
+  
+  user_group <- vars[v]
+  
+  sites_summary <- sites %>% 
+    filter(
+      biome %in% c("Marine", "Terrestrial + Marine"),
+      interventi == "Protected Area (National or Regional)",
+      gazettemen > as.Date("2020-07-01") &
+        gazettemen < as.Date("2021-06-30") | 
+        str_detect(improved_m, "Yes")) %>% 
+    filter(is.na(ci_divis_1) | ci_divis_1 != "C4O - Blue Nature Alliance") %>% 
+    group_by_at(user_group) %>% 
+    summarize(
+      area_ha = sum(area_ha)) %>% 
+    ungroup() 
+  
+  remove_ids <- sites %>% 
+    filter(
+      !biome %in% c("Marine", "Terrestrial + Marine") |
+        interventi == "Protected Area (National or Regional)" | 
+        (is.na(ci_divis_1) | ci_divis_1 != "C4O - Blue Nature Alliance") | 
+        (gazettemen > as.Date("2020-07-01") &
+           gazettemen < as.Date("2021-06-30") | 
+           str_detect(improved_m, "Yes"))) %>% 
+    pluck("ci_id") %>% 
+    unique()
+  
+  # summarize overlaps
+  overlaps_summary <- overlaps %>% 
+    rowwise() %>% 
+    mutate(remove = any(unlist(ci_id) %in% remove_ids)) %>%
+    ungroup() %>% 
+    filter(!remove == TRUE) 
+  # 0 overlaps - don't need to correct anything from sites_summary
+  # may have to adjust in future years if there are overlaps
+  
+  corrected_summary <- sites_summary
+  
+  write_csv(
+    corrected_summary,
+    file = paste0("results/summaries/special_queries/ImpactIndicators", "_", str_to_title(user_group),
+                  "_marineProtectedAreas.csv")
+  )
+  
+}
+
+```
+
+```{r}
+# checking overlaps... 
+
+overlaps_check <- overlaps %>% 
+  rowwise() %>% 
+  filter(any(unlist(biome) == "Marine"),
+         any(unlist(interventi) == "Protected Area (National or Regional)")) %>% 
+  ungroup()
 ```
 
