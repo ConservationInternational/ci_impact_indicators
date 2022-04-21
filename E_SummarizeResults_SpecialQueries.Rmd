@@ -1,0 +1,237 @@
+---
+title: "Impact Indicators: Special Queries"
+author: "Cameryn Brock"
+date: "4/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+
+# read in data for 'other indicators' for all sites and overlaps
+sites <- read_csv("results/FY21_ImpactIndicators_Other_Sites.csv")
+overlaps <- readRDS("results/FY21_ImpactIndicators_Other_Overlaps.rds")
+
+# Define summarizing function
+other_summarize <- function(df){
+  df %>% 
+    summarize(across(
+      .cols = c(area_ha, rest_area, population, 
+                tstor_woody, tstor_soil, tstor_total, 
+                carbon_seq_potl),
+      sum, na.rm = TRUE),
+      .groups = "keep") 
+}
+```
+
+## 1. Southern Cross Area Under Restoration
+
+* Reporting levels = country and scape; please also include totals by restoration type
+* Restoration Type column must be selected (remove blanks and “not applicable”) 
+* Use the CI start date column - should not include anything before 2017 (prior to SC)
+
+```{r, Southern Cross Area Under Restoration}
+vars <- c("ci_sls_2", "country")
+
+for (v in seq_along(vars)){
+  
+  user_group_1 <- vars[v]
+  user_group_2 <- "restoratio"
+  
+  user_groups <- c(user_group_1, user_group_2)
+  
+  sites_summary <- sites %>% 
+    # remove sites before 2017
+    filter(ci_start_d > as.Date('2017-01-01'),
+           restoratio != "Not Applicable") %>% 
+    group_by_at(user_groups) %>% 
+    other_summarize() %>% 
+    ungroup() 
+  
+  remove_ids <- sites %>% 
+    filter(ci_start_d < as.Date('2017-01-01') | restoratio == "Not Applicable") %>% 
+    pluck("ci_id")
+  
+  # summarize overlaps
+  overlaps_summary <- overlaps %>% 
+    rowwise() %>% 
+    mutate(remove = any(unlist(ci_id) %in% remove_ids)) %>%
+    ungroup() %>% 
+    filter(!remove == TRUE) %>% 
+    dplyr::select((!!as.symbol(user_group_1)), (!!as.symbol(user_group_2)), 
+                  area_ha, rest_area, population, tstor_woody, 
+                  tstor_soil, tstor_total, carbon_seq_potl) %>% 
+    rowwise() %>% 
+    # get a list of duplicated values
+    mutate(duplicates = list((!!as.symbol(user_group_2))[duplicated((!!as.symbol(user_group_2)))])) %>% 
+    ungroup() %>% 
+    # remove those with no duplicates
+    filter(!duplicates == "character(0)") %>% 
+    # multiply values of interest by the number of times its duplicated & make negative 
+    rowwise() %>%
+    mutate({{ user_group_2 }} := list(unique(duplicates))) %>% 
+    unnest({{ user_group_2 }}) %>% 
+    ungroup() %>% 
+    rowwise() %>% 
+    mutate(duplicate_n = sum((!!as.symbol(user_group_2)) == duplicates, na.rm = TRUE)) %>% 
+    mutate(across(
+      .cols = c(area_ha, rest_area, population, tstor_woody, 
+                tstor_soil, tstor_total, carbon_seq_potl),
+      ~ .x * -duplicate_n))  %>% 
+    
+    # do again for second grouping if needed
+    mutate(duplicates = list((!!as.symbol(user_group_1))[duplicated((!!as.symbol(user_group_1)))])) %>% 
+    ungroup() %>% 
+    filter(!duplicates == "character(0)") %>% 
+    rowwise() %>%
+    mutate({{ user_group_1 }} := unique(duplicates)) %>% 
+    #      unnest({{ user_group_1 }}) %>% 
+    ungroup() %>% 
+    # summarize as you did with sites
+    group_by_at(user_groups) %>% 
+    other_summarize() %>% 
+    ungroup() 
+  
+  # combine the two data frames and summarize to subtract the overlaps
+  corrected_summary <- sites_summary %>% 
+    bind_rows(overlaps_summary) %>% 
+    group_by_at(user_groups) %>% 
+    other_summarize() %>% 
+    ungroup() %>% 
+    dplyr::select(c(1,2,4))
+  
+  write_csv(
+    corrected_summary,
+    file = paste0("results/summaries/special_queries/ImpactIndicators", "_", str_to_title(user_group_1),
+                  "_", str_to_title(user_group_2), "_restAreaPost2017.csv")
+  )
+  
+}
+```
+
+## 2.  Southern Cross Potential Sequestration
+
+* Reporting levels = country and scape; please also include totals by restoration type
+* Restoration Type column must be selected (remove blanks and “not applicable”) 
+* If restoration type = Agroforestry, Enrichment Planting/Assisted Natural Regeneration, Mangrove Shrub Restoration, Mangrove Tree Restoration, Plantations & Woodlots – Mixed 50/50, Seed Dispersal, Wetland Restoration - Use the tree planting date – should not include anything prior to 2018 or after June 30, 2021 
+* If restoration type = Rangeland Restoration, natural regeneration - Use the CI start date - should not include anything prior to 2018 or after June 30, 2021 
+
+
+```{r, Southern Cross Potential Sequestration}
+vars <- c("ci_sls_2", "country")
+
+for (v in seq_along(vars)){
+  
+  user_group_1 <- vars[v]
+  user_group_2 <- "restoratio"
+  
+  user_groups <- c(user_group_1, user_group_2)
+  
+  sites_summary <- sites %>% 
+    filter(restoratio != "Not Applicable") %>% 
+    # remove sites as requested
+    mutate(remove = case_when(
+      tree_plant > as.Date('2018-01-01') & 
+        tree_plant < as.Date('2021-06-30') ~ "keep",
+      restoratio %in% c("Rangeland Restoration - Planned Grazing", "Natural Regeneration") &
+        ci_start_d > as.Date('2018-01-01') & 
+        ci_start_d < as.Date('2021-06-30') ~ "keep",
+      T ~ "remove"
+    )) %>% 
+    filter(remove == "keep") %>% 
+    dplyr::select(!remove) %>% 
+    group_by_at(user_groups) %>% 
+    other_summarize() %>% 
+    ungroup() 
+  
+  remove_ids <- sites %>% 
+    # remove sites as requested
+    mutate(remove = case_when(
+      tree_plant > as.Date('2018-01-01') & 
+        tree_plant < as.Date('2021-06-30') ~ "keep",
+      restoratio %in% c("Rangeland Restoration - Planned Grazing", "Natural Regeneration") &
+        ci_start_d > as.Date('2018-01-01') & 
+        ci_start_d < as.Date('2021-06-30') ~ "keep",
+      T ~ "remove"
+    )) %>% 
+    filter(remove == "remove") %>% 
+    pluck("ci_id")
+  
+  # summarize overlaps
+  overlaps_summary <- overlaps %>% 
+    rowwise() %>% 
+    mutate(remove = any(unlist(ci_id) %in% remove_ids)) %>%
+    ungroup() %>% 
+    filter(!remove == TRUE) %>% 
+    dplyr::select((!!as.symbol(user_group_1)), (!!as.symbol(user_group_2)), 
+                  area_ha, rest_area, population, tstor_woody, 
+                  tstor_soil, tstor_total, carbon_seq_potl) %>% 
+    rowwise() %>% 
+    # get a list of duplicated values
+    mutate(duplicates = list((!!as.symbol(user_group_2))[duplicated((!!as.symbol(user_group_2)))])) %>% 
+    ungroup() %>% 
+    # remove those with no duplicates
+    filter(!duplicates == "character(0)") %>% 
+    # multiply values of interest by the number of times its duplicated & make negative 
+    rowwise() %>%
+    mutate({{ user_group_2 }} := list(unique(duplicates))) %>% 
+    unnest({{ user_group_2 }}) %>% 
+    ungroup() %>% 
+    rowwise() %>% 
+    mutate(duplicate_n = sum((!!as.symbol(user_group_2)) == duplicates, na.rm = TRUE)) %>% 
+    mutate(across(
+      .cols = c(area_ha, rest_area, population, tstor_woody, 
+                tstor_soil, tstor_total, carbon_seq_potl),
+      ~ .x * -duplicate_n))  %>% 
+    
+    # do again for second grouping if needed
+    mutate(duplicates = list((!!as.symbol(user_group_1))[duplicated((!!as.symbol(user_group_1)))])) %>% 
+    ungroup() %>% 
+    filter(!duplicates == "character(0)") %>% 
+    rowwise() %>%
+    mutate({{ user_group_1 }} := unique(duplicates)) %>% 
+    #      unnest({{ user_group_1 }}) %>% 
+    ungroup() %>% 
+    # summarize as you did with sites
+    group_by_at(user_groups) %>% 
+    other_summarize() %>% 
+    ungroup() %>% 
+    filter(!restoratio == "Not Applicable")
+  
+  # combine the two data frames and summarize to subtract the overlaps
+  corrected_summary <- sites_summary %>% 
+    bind_rows(overlaps_summary) %>% 
+    group_by_at(user_groups) %>% 
+    other_summarize() %>% 
+    ungroup() %>% 
+    dplyr::select(c(1,2,9))
+  
+  write_csv(
+    corrected_summary,
+    file = paste0("results/summaries/special_queries/ImpactIndicators", "_", str_to_title(user_group_1),
+                  "_", str_to_title(user_group_2), "_carbonSeqPost2018.csv")
+  )
+  
+}
+```
+
+## 3. Southern Cross Marine Protected Area 
+
+* Reporting levels = by country and scape (CI_SLS_2 column)
+* Query "Total Marine Protected Area" (square kilometer) 
+    + Biome Column = Marine; Terrestrial + Marine 
+    + Intervention Type= Protected Area (Note: please do not include Protected Area – Proposed) 
+    + Gazettement Date= Should fall within FY21 (July 1 2020 – June 30 2021) OR 
+    + OR Improved Management Column = Include all options with “yes” in the selection (ex. “Yes, staff increased”); Remove - Blanks and Not Applicable 
+    + CI Division - Do not include anything tagged as “C4O - Blue Nature Alliance” 
+
+
+
+```{r, Southern Cross Marine Protected Area}
+
+```
+
