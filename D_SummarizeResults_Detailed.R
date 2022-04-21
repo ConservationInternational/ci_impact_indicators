@@ -24,8 +24,7 @@ vars_2 <- c(
   "restoratio")
 
 
-# Irrecoverable carbon 
-# -----
+# Irrecoverable carbon -----
 
 # define functions
 ic_summarize <- function(df){
@@ -110,8 +109,7 @@ for (i in seq_along(vars_1)) {
 
 
 
-# Other indicators
-# -----
+# Other indicators -----
 
 # Define summarizing function
 other_summarize <- function(df){
@@ -170,7 +168,7 @@ for (i in seq_along(vars_1)) {
       filter(!duplicates == "character(0)") %>% 
       rowwise() %>%
       mutate({{ user_group_1 }} := unique(duplicates)) %>% 
-#      unnest({{ user_group_1 }}) %>% 
+      #      unnest({{ user_group_1 }}) %>% 
       ungroup() %>% 
       # summarize as you did with sites
       group_by_at(user_groups) %>% 
@@ -192,3 +190,8 @@ for (i in seq_along(vars_1)) {
   }
   
 }
+
+
+
+
+
