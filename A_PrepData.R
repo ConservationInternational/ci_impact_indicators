@@ -92,22 +92,38 @@ writeRaster(soil, "data/carbon_stored/OCSTHA_30cm_1km.tif")
 ##### Irrecoverable Carbon
 #####
 
-# ecosystems
 eco <- rast("data/ecosystems/ecosystems.tif") 
 
-# total tonnes of carbon
-total_ic <- rast("data/irrecoverable_carbon/Irrecoverable_C_Total_2018.tif")
-# ic total with vals below 25 as NA
-high_ic_vals <- rast("data/irrecoverable_carbon/ic_above_25.tif") # ic_total w/ vals below 25 as NA
+# total tonnes of carbon per hectare
+total_ic <- rast("data/irrecoverable_carbon/Irrecoverable_C_Total_2018.tif") %>% 
+  resample(eco, method = "bilinear")
+# checked multiple methods of resampling + combining with area and this was the most accurate
+# at achieving 139B tonnes
+
+# convert to tonnes per pixel
+area <- raster::area(raster(total_ic)) * 100 #km2 to ha
+
+tonnes_ic <- raster(total_ic) * area
+
+global(rast(tonnes_ic), "sum", na.rm = TRUE)
+
+writeRaster(tonnes_ic, "tonnes_ic_bilmethod.tif")
+
+total_ic <- rast("tonnes_ic_bilmethod.tif") 
+
+# ic total with vals below 25 tonnes/ha as NA
+high_ic <- rast("data/irrecoverable_carbon/ic_above_25.tif") %>% 
+  resample(eco, method = "bilinear")
+
+# ic_total w/ vals below 25 as NA
 
 # make raster of 'any' ic (above 0.01)
-any_ic <- ic_total
+any_ic <- total_ic
 any_ic[any_ic > 0.01] <- 1
 any_ic[any_ic <= 0.01] <- NA
-# writeRaster(any_ic, "data/irrecoverable_carbon/ic_above_0.01.tif") 
+
 
 # change ic_high to binary
-high_ic <- high_ic_vals
 high_ic[high_ic > 0] <- 1
 
 # need 'high' and 'any' to reflect has/pixel
@@ -117,30 +133,37 @@ high_area <- cellSize(high_ic, unit = "ha")
 
 any_area <- cellSize(any_ic, unit = "ha")
 
-# create stack and resample to ecosystems
-ic_stack <- c(ic_total, high_area, any_area) %>% 
-  terra::resample(y = eco, method = "bilinear")
+
+# create stack
+ic_stack <- c(total_ic, high_area, any_area)  
 
 names(ic_stack) <- c("tstor_ic", "ha_high_ic", "ha_ic")
 
-# writeRaster(ic_stack, "data/irrecoverable_carbon/ic_stack_prepped.tif")
+writeRaster(ic_stack, "data/irrecoverable_carbon/ic_stack_prepped.tif",
+            overwrite = TRUE)
+
+ic_stack <- rast("data/irrecoverable_carbon/ic_stack_prepped.tif")
+
+# check total to confirm it matches with our 140B tonnes total in Noon et al
+global(ic_stack$tstor_ic, "sum", na.rm = TRUE)
 
 # divvy up irrecoverable carbon by ecosystem
-# ic_stack <- rast("data/irrecoverable_carbon/ic_stack_prepped.tif")
 
 ### ecosystems to mask irr carbon to
-eco <- rast("data/ecosystems/ecosystems.tif") 
 
-eco_codes <- readRDS("tables/ecosystems.rds") %>% 
-  as.data.frame()
+eco <- rast("data/ecosystems/ecosystems.tif") 
+eco_codes <- data.frame(cats(eco$class)) %>%
+  rename('ecosystem_name' = class) %>% 
+  drop_na()
 
 eco_seg <- eco %>%
   terra::segregate()
 
 eco_seg[eco_seg == 0] <- NA
 
-# writeRaster(eco_seg, "ecosystems_masks.tif")
-# eco_seg <- rast("ecosystems_masks.tif")
+writeRaster(eco_seg, "eco_seg_nas.tif", overwrite = TRUE)
+
+eco_seg <- rast("eco_seg_nas.tif")
 
 # for each ic layer
 for (i in 1:nlyr(ic_stack)){
@@ -150,10 +173,10 @@ for (i in 1:nlyr(ic_stack)){
   ic_eco_stack <- ic_lyr
   
   # mask irr carbon to each ecosystem layer then add to stack
-  for(e in 1:8){
+  for(e in 1:nlyr(eco_seg)){
+    eco_mask <- eco_seg[[e]]
     class <- eco_codes$ecosystem_name[e] %>% 
       make_clean_names()
-    eco_mask <- eco_seg[[e]]
     ic_masked <- ic_lyr[[1]] %>%
       terra::mask(mask = eco_mask)
     names(ic_masked) <- paste0(og_name, "_", class)
@@ -166,7 +189,8 @@ for (i in 1:nlyr(ic_stack)){
   # then save stack for that ic 
   writeRaster(
     ic_eco_stack, 
-    filename = paste0("data/irrecoverable_carbon/", og_name, "_ecosystem_stack.tif"))
+    filename = paste0("data/irrecoverable_carbon/", og_name, "_ecosystem_stack.tif"),
+    overwrite = TRUE)
 }
 
 

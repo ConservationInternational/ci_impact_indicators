@@ -111,8 +111,6 @@ pop_extract_int <- exact_extract(
   append_cols = colnames(int)) %>% 
   rename("population" = sum)
 
-
-
 # carbon stored - soil
 soil_extract_shp <- exact_extract(
   x = carbon_soil,
@@ -339,7 +337,7 @@ int_w_fields <- int_all %>%
 saveRDS(int_w_fields, "results/FY21_ImpactIndicators_Other_Overlaps.rds")
 
 
-## Irr carbon
+## Irr carbon ----
 
 # irrecoverable carbon
 ic_extract_shp <- exact_extract(
@@ -359,12 +357,8 @@ ic_extract_int <- exact_extract(
 # tidy up and keep relevant, summable values
 # note only returns sites with ic
 ic_shp_tidy <- ic_extract_shp %>% 
-  dplyr::select(!c(country_is, star_tag_t, area_name, rest_area, comment, star_tag_p, star_tag_s, origin, project_length)) %>% 
-  # dplyr::select(c(ci_id, biome, ci_divisio,
-  #                 ci_divis_1, country,
-  #                 new_or_con, new_or_c_1,
-  #                 ci_sls_1, ci_sls_2, 
-  #                 area_ha, starts_with("sum."))) %>% 
+  dplyr::select(!c(country_is, star_tag_t, area_name, rest_area, comment,
+                   star_tag_p, star_tag_s, origin, project_length)) %>% 
   pivot_longer(cols = starts_with("sum."),
                names_to = "colname",
                values_to = "value") %>% 

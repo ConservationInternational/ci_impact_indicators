@@ -3,6 +3,8 @@ title: "Impact Indicators: Special Queries"
 author: "Cameryn Brock"
 date: "4/21/2022"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -136,18 +138,18 @@ for (v in seq_along(vars)){
   user_groups <- c(user_group_1, user_group_2)
   
   sites_summary <- sites %>% 
-    filter(restoratio != "Not Applicable") %>% 
-    # remove sites as requested
-    mutate(remove = case_when(
-      tree_plant > as.Date('2018-01-01') & 
-        tree_plant < as.Date('2021-06-30') ~ "keep",
-      restoratio %in% c("Rangeland Restoration - Planned Grazing", "Natural Regeneration") &
-        ci_start_d > as.Date('2018-01-01') & 
-        ci_start_d < as.Date('2021-06-30') ~ "keep",
-      T ~ "remove"
-    )) %>% 
-    filter(remove == "keep") %>% 
-    dplyr::select(!remove) %>% 
+    # filter(restoratio != "Not Applicable") %>% 
+    # # remove sites as requested
+    # mutate(remove = case_when(
+    #   tree_plant > as.Date('2018-01-01') & 
+    #     tree_plant < as.Date('2021-06-30') ~ "keep",
+    #   restoratio %in% c("Rangeland Restoration - Planned Grazing", "Natural Regeneration") &
+    #     ci_start_d > as.Date('2018-01-01') & 
+    #     ci_start_d < as.Date('2021-06-30') ~ "keep",
+    #   T ~ "remove"
+    # )) %>% 
+    # filter(remove == "keep") %>% 
+    # dplyr::select(!remove) %>% 
     group_by_at(user_groups) %>% 
     other_summarize() %>% 
     ungroup() 
@@ -298,14 +300,3 @@ for (v in seq_along(vars)){
 }
 
 ```
-
-```{r}
-# checking overlaps... 
-
-overlaps_check <- overlaps %>% 
-  rowwise() %>% 
-  filter(any(unlist(biome) == "Marine"),
-         any(unlist(interventi) == "Protected Area (National or Regional)")) %>% 
-  ungroup()
-```
-
