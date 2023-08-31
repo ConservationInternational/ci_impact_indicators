@@ -14,9 +14,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(tidyverse)
 
+year <- "2022"
+
 # read in data for 'other indicators' for all sites and overlaps
-sites <- read_csv("results/FY21_ImpactIndicators_Other_Sites.csv")
-overlaps <- readRDS("results/FY21_ImpactIndicators_Other_Overlaps.rds")
+sites <- read_csv(paste0(
+  "results/FY", str_sub(year, start = 3), "_ImpactIndicators_Other_Sites.csv"))
+
+overlaps <- readRDS(
+  paste0("results/FY", str_sub(year, start = 3), "_ImpactIndicators_Other_Overlaps.rds"))
 
 # Define summarizing function
 other_summarize <- function(df){
@@ -113,7 +118,7 @@ for (v in seq_along(vars)){
   
   write_csv(
     corrected_summary,
-    file = paste0("results/summaries/special_queries/ImpactIndicators", "_", str_to_title(user_group_1),
+    file = paste0("results/summaries_", year, "/special_queries/ImpactIndicators", "_", str_to_title(user_group_1),
                   "_", str_to_title(user_group_2), "_restAreaPost2017.csv")
   )
   
@@ -219,7 +224,7 @@ for (v in seq_along(vars)){
   
   write_csv(
     corrected_summary,
-    file = paste0("results/summaries/special_queries/ImpactIndicators", "_", str_to_title(user_group_1),
+    file = paste0("results/summaries_", year, "/special_queries/ImpactIndicators", "_", str_to_title(user_group_1),
                   "_", str_to_title(user_group_2), "_carbonSeqPost2018.csv")
   )
   
@@ -293,10 +298,9 @@ for (v in seq_along(vars)){
   
   write_csv(
     corrected_summary,
-    file = paste0("results/summaries/special_queries/ImpactIndicators", "_", str_to_title(user_group),
+    file = paste0("results/summaries_", year, "/special_queries/ImpactIndicators", "_", str_to_title(user_group),
                   "_marineProtectedAreas.csv")
   )
   
 }
-
 ```

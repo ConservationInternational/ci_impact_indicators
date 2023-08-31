@@ -6,9 +6,10 @@ library(sf)
 library(terra)
 library(exactextractr)
 library(janitor)
+library(googledrive)
 library(tidyverse)
 
-
+year <- "2022"
 
 #####
 
@@ -28,10 +29,9 @@ my_crs <- crs(ic_stack)
 
 
 # woody and soil carbon
-carbon_woody <- rast("data/carbon_stored/biomass_prepped.tif")
+carbon_woody <- rast(paste0("data/carbon_stored/biomass_prepped_", year, ".tif"))
 # agb + bgb w/ hansen forest loss to 2020 masked out aggregated to ~300m
 carbon_soil <- rast("data/carbon_stored/OCSTHA_30cm_1km.tif")
-
 
 
 ### population
@@ -42,7 +42,10 @@ pop <- rast("data/population/ppp_2020_1km_Aggregated.tif")
 seq <- rast("data/carbon_sequestration/carbon_sequestration_potl_stack.tif")
 
 
-
+### avoided emissions - by site, already prepped by Alex
+ae <- readRDS("data/avoided_emissions/ae_by_site_by_year.rds") %>% 
+  dplyr::select(site_id, emissions_avoided_mgco2e_2020) %>% 
+  rename(ci_id = site_id)
 
 
 #####
@@ -64,11 +67,11 @@ inter_codes <- read_csv("misc/intervention_lookup.csv") %>%
 # removed wwf, bna, & slw sites by request
 # removed proposed PAs by request
 # calculated project length as beggining > end, and if no end then used today [[need to verify]]
-adjusted_end_date <- as.Date("2022-12-31")
+adjusted_end_date <- as.Date(paste0(as.numeric(year) + 1, "-12-31"))
 
 shp <- read_sf(
   dsn = "data/ci_sites",
-  layer = "FY2021_Sites")  %>% 
+  layer = paste0("FY", year, "_Sites"))  %>% 
   rowwise() %>% 
   mutate(project_length = lubridate::time_length(
     difftime(if_else(is.na(ci_end_dat), 
@@ -84,7 +87,9 @@ shp_df <- shp %>% st_drop_geometry()
 
 # df of intersections among site polygons
 # same changes as for shp
-int <- readRDS("data/ci_sites/FY2021_Overlaps_Clean.rds") 
+int <- readRDS(paste0("data/ci_sites/FY", year, "_Overlaps_Clean.rds")) %>% 
+  dplyr::select("n_overlaps", "origins",  "area_ha",  "ci_id_1",  "ci_id_2",
+                "ci_id_3",  "ci_id_4",  "ci_id_5" )
 
 int_df <- int %>% st_drop_geometry()  
 
@@ -258,17 +263,41 @@ seq_extract_int <- exact_extract(
 
 
 # combine all except ic - ic will be separate bc divied by ecosystem
-shp_all <- pop_extract_shp %>% 
+shp_all_wo_ae <- pop_extract_shp %>% 
   left_join(woody_extract_shp, by = "ci_id") %>% 
   left_join(soil_extract_shp, by = "ci_id") %>% 
   left_join(seq_extract_shp, by = "ci_id") %>% 
-  dplyr::select(!c(country_is, star_tag_t, area_name, comment, star_tag_p, star_tag_s, origin, project_length)) %>% 
+  dplyr::select(!c(star_tag_t, area_name, comment, star_tag_p, 
+                   star_tag_s, origin, project_length)) %>% 
   rowwise() %>% 
   mutate(tstor_total = sum(tstor_woody, tstor_soil)) %>% 
   ungroup() %>% 
-  relocate(tstor_total, .before = carbon_seq_potl)
+  relocate(tstor_total, .before = carbon_seq_potl) 
 
-write_csv(shp_all, "results/FY21_ImpactIndicators_Other_Sites.csv")
+# break up ae by % area
+site_areas <- shp_all_wo_ae %>% 
+  group_by(ci_id) %>% 
+  summarize("total_area" = sum(area_ha, na.rm = TRUE)) %>% 
+  ungroup()
+
+ae_ref <- shp_all_wo_ae %>% 
+  dplyr::select(1:24) %>%
+  left_join(site_areas, by = 'ci_id') %>% 
+  rowwise() %>% 
+  mutate(pct_area = area_ha/total_area) %>% 
+  ungroup() %>% 
+  left_join(ae, by = 'ci_id') %>% ## here we lose all BNA/WWF sites - large portion of emissions (almost all)
+  mutate(emissions_avoided_mgco2e = emissions_avoided_mgco2e_2020 * pct_area, na.rm = TRUE) %>% 
+  mutate(emissions_avoided_mgco2e = replace_na(emissions_avoided_mgco2e, 0)) %>% 
+  dplyr::select(ci_id, emissions_avoided_mgco2e)
+
+shp_all <- shp_all_wo_ae %>% 
+  cbind(ae_ref$emissions_avoided_mgco2e) %>% 
+  rename(emissions_avoided_mgco2e = 'ae_ref$emissions_avoided_mgco2e')
+
+write_csv(shp_all, 
+          paste0("results/FY", str_sub(year, start = 3), 
+                 "_ImpactIndicators_Other_Sites.csv"))
 
 
 int_all <- pop_extract_int %>% 
@@ -282,11 +311,10 @@ int_all <- pop_extract_int %>%
   relocate(rest_area, .before = population) %>% 
   relocate(tstor_total, .before = carbon_seq_potl)
 
-
 # join with field data
 # interested in country, division, sls, site
 fields <- shp_df %>% 
-  dplyr::select(!c(area_ha, country_is, star_tag_t, area_name, comment, star_tag_p, star_tag_s, rest_area, origin, project_length))
+  dplyr::select(!c(area_ha, star_tag_t, area_name, comment, star_tag_p, star_tag_s, rest_area, origin, project_length))
 
 int_w_fields <- int_all %>%
   left_join(fields, by = c("ci_id_1" = "ci_id")) %>% 
@@ -326,15 +354,18 @@ int_w_fields <- int_all %>%
     improved_m = list(na.omit(c(improved_m_1, improved_m_2, improved_m_3, improved_m_4, improved_m_5))),
     ci_start_d = list(na.omit(c(ci_start_d_1, ci_start_d_2, ci_start_d_3, ci_start_d_4, ci_start_d_5))),
     ci_end_dat = list(na.omit(c(ci_end_dat_1, ci_end_dat_2, ci_end_dat_3, ci_end_dat_4, ci_end_dat_5)))
-    ) %>% 
+  ) %>% 
   ungroup() %>% 
   dplyr::select(n_overlaps,
                 colnames(fields),
                 area_ha, rest_area,
                 population, tstor_woody, tstor_soil, tstor_total, carbon_seq_potl)
 
+
 # needs to be rds to maintain lists
-saveRDS(int_w_fields, "results/FY21_ImpactIndicators_Other_Overlaps.rds")
+saveRDS(int_w_fields, 
+        paste0("results/FY", str_sub(year, start = 3),
+               "_ImpactIndicators_Other_Overlaps.rds"))
 
 
 ## Irr carbon ----
@@ -357,7 +388,7 @@ ic_extract_int <- exact_extract(
 # tidy up and keep relevant, summable values
 # note only returns sites with ic
 ic_shp_tidy <- ic_extract_shp %>% 
-  dplyr::select(!c(country_is, star_tag_t, area_name, rest_area, comment,
+  dplyr::select(!c(star_tag_t, area_name, rest_area, comment,
                    star_tag_p, star_tag_s, origin, project_length)) %>% 
   pivot_longer(cols = starts_with("sum."),
                names_to = "colname",
@@ -388,7 +419,9 @@ ic_shp_tidy <- ic_extract_shp %>%
   filter(!tstor_ic == 0) %>% 
   dplyr::select(!c(area_ha))
 
-write_csv(ic_shp_tidy, "results/FY21_ImpactIndicators_IrrecoverableCarbon_Sites.csv")
+write_csv(ic_shp_tidy, 
+          paste0("results/FY", str_sub(year, start = 3), 
+                 "_ImpactIndicators_IrrecoverableCarbon_Sites.csv"))
 
 
 
@@ -469,4 +502,6 @@ ic_int_w_fields <- ic_int_tidy %>%
                 colnames(fields),
                 ecosystem, tstor_ic, ha_high_ic, ha_ic, tonnes_ha_ic, tstor_blue_ic)
 
-saveRDS(ic_int_w_fields, "results/FY21_ImpactIndicators_IrrecoverableCarbon_Overlaps.rds")
+saveRDS(ic_int_w_fields, 
+        paste0("results/FY", str_sub(year, start = 3),
+               "_ImpactIndicators_IrrecoverableCarbon_Overlaps.rds"))

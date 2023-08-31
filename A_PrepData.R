@@ -8,6 +8,8 @@ library(terra)
 library(sf)
 library(janitor)
 
+year <- "2022"
+
 #####
 
 ##### Carbon Stored
@@ -39,11 +41,17 @@ for (i in seq_along(tiles)){
   ## NOTE instead of * 0.5 I divde by 2 in the B: extract data script
   
   # forest loss from hansen
-  hansen_url <- paste0("https://storage.googleapis.com/earthenginepartners-hansen/GFC-2020-v1.8/Hansen_GFC-2020-v1.8_lossyear_", tile, ".tif")
+  hansen_url <- paste0(case_when(
+    year == "2022" ~
+      "https://storage.googleapis.com/earthenginepartners-hansen/GFC-2021-v1.9/Hansen_GFC-2021-v1.9_lossyear_",
+    year == "2021" ~
+      "https://storage.googleapis.com/earthenginepartners-hansen/GFC-2020-v1.8/Hansen_GFC-2020-v1.8_lossyear_"), 
+    tile, ".tif")
   download.file(
     url = hansen_url, 
     destfile = paste0(hansen_dest30, "hansen_", tile, ".tif"),
     mode = "wb")
+  
   hansen <- rast(paste0(hansen_dest30, "hansen_", tile, ".tif"))
   
   # mask out hansen forest loss from biomass
@@ -56,7 +64,7 @@ for (i in seq_along(tiles)){
   
   # add to list
   rast_list[[i]] <- bio_300
-
+  
   tmpFiles(remove = TRUE)
 }
 
@@ -65,7 +73,7 @@ for (i in seq_along(tiles)){
 rsrc <- terra::src(rast_list)
 carbon_bio_mosaic <- mosaic(rsrc)
 
-writeRaster(carbon_bio_mosaic, "data/carbon_stored/biomass_prepped.tif")
+writeRaster(carbon_bio_mosaic, paste0("data/carbon_stored/biomass_prepped_", year, ".tif"))
 
 # need to test with sites overlaid
 
@@ -257,13 +265,16 @@ sf_use_s2(FALSE)
 # remove wwf, bna, swl, and proposed sites per request
 shp <- read_sf(
   dsn = "data/ci_sites",
-  layer = "Final_FY2021_Postvetting_Cleaned_20210923"
-) %>% 
-  st_transform(my_crs) %>%
+  layer = case_when(year == "2022" ~ "FY22_Vetting")) %>% 
+  clean_names() %>% 
+  st_transform("epsg:5070") %>%
   st_zm() %>% 
   st_make_valid() %>% 
-  # sf::st_buffer(dist = 0) %>% 
-  clean_names() %>% 
+  sf::st_buffer(dist = 0) %>%
+  lwgeom::st_snap_to_grid(50) %>% 
+  st_set_precision(50) %>% 
+  st_make_valid() %>%  
+  sf::st_buffer(dist = 0) %>%
   filter(!str_detect(ci_id, "WWF"),
          !str_detect(ci_id, "BNA"),
          !str_detect(ci_id, "SLW")) %>%
@@ -282,28 +293,45 @@ shp <- read_sf(
   dplyr::select(!c(
     global_id, creation_da, creator, edit_date, editor,
     internal_e, shape_area, shape_leng, undr_rest
-  ))
+  )) %>% 
+  filter(!st_is_empty(.))
 
-# write_sf(shp, "data/ci_sites/FY2021_Sites.shp")
+shp_crs <- shp %>% 
+  st_transform(my_crs) %>% 
+  st_make_valid() 
+
+write_sf(shp_crs, paste0("data/ci_sites/FY", year, "_Sites.shp"))
 
 # calculate intersections
 # start w/ original shapefiles with sites requested removed
 
-intersections <- shp %>% 
+intersections <- shp %>%  
   dplyr::select(origin, geometry) %>% 
-  st_intersection()
+  st_intersection() %>%  
+  st_transform(my_crs) %>% 
+  st_make_valid()  
+
+int_shp <- intersections %>% 
+  filter(n.overlaps > 1) %>% 
+  dplyr::select(!origins) %>% 
+  st_collection_extract("POLYGON")
+
+write_sf(int_shp, paste0("data/ci_sites/FY", year, "_Intersections.shp"))
+
+write_sf(dplyr::select(intersections, !origins), 
+         paste0("data/ci_sites/FY", year, "_Intersections.shp"))
 
 int <- intersections %>% 
   filter(n.overlaps > 1) %>% 
   dplyr::select(n.overlaps, origins, geometry) %>% 
   mutate(row_number = row_number())
 
-# saveRDS(int,"data/ci_sites/FY2021_Overlaps.rds")
+saveRDS(int,paste0("data/ci_sites/FY", year, "_Overlaps.rds"))
 
 # link intersections to ci_id
 origin_ref <- read_sf(
   dsn = "data/ci_sites",
-  layer = "FY2021_Sites"
+  layer = paste0("FY", year, "_Sites")
 ) %>% 
   mutate(origin = row_number()) %>% 
   st_transform(my_crs) %>% 
@@ -315,7 +343,7 @@ origin_ref <- read_sf(
 
 shp_df <- shp %>% st_drop_geometry()
 
-int <- readRDS("data/ci_sites/FY2021_Overlaps.rds") %>%
+int <- readRDS(paste0("data/ci_sites/FY", year, "_Overlaps.rds")) %>%
   clean_names() %>% 
   st_transform(my_crs) %>% 
   st_zm() %>% 
@@ -348,7 +376,4 @@ int <- readRDS("data/ci_sites/FY2021_Overlaps.rds") %>%
   dplyr::select(!origin) %>% 
   ungroup()
 
-
-
-saveRDS(int, "data/ci_sites/FY2021_Overlaps_Clean.rds")
-
+saveRDS(int, paste0("data/ci_sites/FY", year, "_Overlaps_Clean.rds"))
