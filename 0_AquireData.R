@@ -2,6 +2,14 @@
 # Contact: Anna Ballasiotes
 # Last updated: 04/7/2025
 
+library(tidyverse)
+library(raster)
+library(terra)
+library(sf)
+library(janitor)
+library("aws.s3")
+library(dplyr)
+
 
 # Acquire "data" folder
 # Link to sharepoint below directs you to "ci_sites"
