@@ -3,8 +3,12 @@ library(raster)
 library(terra)
 library(sf)
 library(geodata)
+library(terra)
+gdal()
 
-template <- rast("~/Conservation International/Data/land_1km_eck4.tif")
+
+
+template <- rast("C:/Users/aballasiotes/Dev/Projects/ci_impact_indicators/data/avoided_emissions/land_1km_eck4.tif")
 
 # SRTM30+ Global 1-km Digital Elevation Model (DEM): Version 11: Land Surface
 # from https://pae-paha.pacioos.hawaii.edu/erddap/griddap/srtm30plus_v11_land.html
@@ -24,10 +28,9 @@ writeRaster(
 # project to be able to calculate slope
 
 dem_proj <- dem %>% 
-  project(template, 
+  resample(template, 
           method = "bilinear",
-          threads = TRUE,
-          mask = TRUE)
+          threads = TRUE)
 
 writeRaster(
   dem_proj,
@@ -39,24 +42,26 @@ slope <- terrain(dem_proj, "slope")
 writeRaster(slope,
             "data/avoided_emissions/covariate_slope.tif")
 
-
+slope <- rast("C:/Users/aballasiotes/Dev/Projects/ci_impact_indicators/data/avoided_emissions/covariate1_slope.tif")
 
 # suitability probability for cropland
 # for now, mosaic from Chen
 
-crop_suit <- rast(
-  "data/avoided_emissions/croplandSuitabilityProbability_Chen2022.tif") %>% 
-  project(template, 
-          method = "bilinear",
-          threads = TRUE,
-          mask = TRUE)
+crop_suit <- rast("data/avoided_emissions/croplandSuitabilityProbability_Chen2022.tif") 
+
+crop_suit <- rast("data/avoided_emissions/croplandSuitabilityProbability_Chen2022.tif") %>% project(template, 
+                     method = "bilinear",
+                     threads = TRUE,
+                     mask = TRUE)
 
 writeRaster(
   crop_suit,
   "covariate_cropland_suitability.tif")
 
+crop_suit_2 <- rast("data/avoided_emissions/covariate2_cropland_suitability.tif")
+
 precip <- rast("data/avoided_emissions/chirps-v2.0.1981-2020.40yrs.tif") %>% 
-  project(template, 
+  resample(template, 
           method = "bilinear",
           threads = TRUE) %>% 
   extend(template) %>% 
@@ -80,7 +85,7 @@ for (i in seq_along(temp_files)){
 }
 
 temp <- mean(temp_stack) %>% 
-  project(template, 
+  resample(template, 
           method = "bilinear",
           threads = TRUE,
           mask = TRUE)
@@ -169,7 +174,8 @@ eco <- read_sf(
 
 writeRaster(
   eco,
-  "data/avoided_emissions/covariate_ecoregions.tif")
+  "data/avoided_emissions/covariate1_ecoregions.tif", overwrite = TRUE)
+
 
 biome <- read_sf(
   dsn = "data/avoided_emissions",
@@ -182,7 +188,7 @@ biome <- read_sf(
 
 writeRaster(
   biome,
-  "data/avoided_emissions/covariate_biome.tif")
+  "data/avoided_emissions/covariate1_biome.tif", overwrite = TRUE)
 
 
 # Population for 2000, 2005, 2010, 2015 2020 from 
@@ -244,7 +250,7 @@ writeRaster(
 
 # biomass
 
-biomass <- rast('data/carbon_stored/biomass_prepped_2022.tif') %>%   
+biomass <- rast('data/carbon_stored/biomass_prepped_2024.tif') %>%   
   project(template, 
           method = "bilinear",
           threads = TRUE) %>% 
@@ -252,7 +258,7 @@ biomass <- rast('data/carbon_stored/biomass_prepped_2022.tif') %>%
 
 writeRaster(
   biomass,
-  "data/avoided_emissions/covariate_biomass.tif")
+  "data/avoided_emissions/covariate_biomass_2024.tif")
 
 
 # land classes
@@ -342,4 +348,4 @@ writeRaster(
   "data/avoided_emissions/covariate_lc2000.tif")
 
 
-# hansen forest cover prepped in hansen_prep
+# hansen forest cover prepped in GEE
