@@ -1,4 +1,4 @@
-# Data Aquisition
+# Data Acquisition
 # Contact: Anna Ballasiotes
 # Last updated: 04/7/2025
 
