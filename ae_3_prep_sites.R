@@ -5,14 +5,20 @@ library(units)
 library(tidyverse)
 library(lubridate)
 
-data_folder <- 'data'
+data_folder <- 'data/'
 
+year = "2024"
 template <- rast(paste0(data_folder, "avoided_emissions/land_1km_eck4.tif"))
 
-sites_2022 <- st_read("data/ci_sites/FY2022_Sites.shp") 
-sites_2022$data_year <- 2022
+sites_2024 <- readRDS(paste0("data/ci_sites/FY", year, "_Sites_Clean.rds")) 
+sites_2024$Data_Year <- 2024
 
-sites <- sites_2022
+fiscalyear <- "FY2024"
+
+
+#Load in 2024 as RDS
+sites <- sites_2024
+
 
 sites_cea <- st_transform(sites, '+proj=cea')
 sites_cea$area_cea <- st_area(sites_cea)
@@ -22,45 +28,40 @@ sites <- st_transform(sites_cea, crs(template))
 
 table(sites_cea$area_cea < as_units(100, 'hectares'))
 
-sites %>%
-    select(CI_ID=ci_id,
-           Data_Year=data_year,
-           Area=area_name,
-           CI_Start_Date=ci_start_d,
-           CI_End_Date=ci_end_dat,
-           CI_Division=ci_divisio,
-           Restoration=restoratio,
-           Area_ha=area_cea) -> sites
+sites <-  sites %>% dplyr::select("CI_ID", "Area_Name",
+          "CI_Start_Date", "CI_End_Date",
+          "Division_Primary_CI", "Intervention_Type", "area_cea", "Data_Year")
+
 sites$CI_ID <- factor(sites$CI_ID)
 
-sites$CI_Start_Date_clean <- as.character(sites$CI_Start_Date)
-sites$CI_Start_Date_clean <- str_replace(sites$CI_Start_Date_clean, '^([0-9]{4})$', '1/1/\\1')
-sites$CI_Start_Date_clean <- lubridate::ymd(sites$CI_Start_Date_clean)
+
+sites$CI_End_Date_clean <- as.Date(sites$CI_End_Date , format = "%Y/%m/%d")
+sites$CI_Start_Date_clean<- as.Date(sites$CI_Start_Date , format = "%Y/%m/%d")
+
 sites %>%
     ggplot() +
     geom_histogram(aes(CI_Start_Date_clean))
-# Set all start dates that are missing to 2016 (the median year)
-sites$CI_Start_Date_clean[is.na(sites$CI_Start_Date_clean)] <- ymd('2016-01-01')
+
+median(sites$CI_Start_Date_clean, na.rm = TRUE)
+
+sum(is.na(sites$CI_Start_Date_clean))
+
+# Set all start dates that are missing to 2022 (the median year)
+sites$CI_Start_Date_clean[is.na(sites$CI_Start_Date_clean)] <- ymd('2022-07-23')
 sites$CI_Start_Year <- year(sites$CI_Start_Date_clean)
 
-sites$CI_End_Date_clean <- as.character(sites$CI_End_Date)
-sites$CI_End_Date_clean <- str_replace(sites$CI_End_Date_clean, '^([0-9]{4})$', '1/1/\\1')
-sites$CI_End_Date_clean <- ymd(sites$CI_End_Date_clean)
 sites %>%
     ggplot() +
     geom_histogram(aes(CI_End_Date_clean))
-# Set all end dates that are greater than 12/31/2019 to NA, so they are treated 
+
+# Set all end dates that are greater than 12/31/2024 to NA, so they are treated 
 # as ongoing
-sites$CI_End_Date_clean[sites$CI_End_Date_clean > ymd('2022-12-31')] <- NA
+
+sites$CI_End_Date_clean[sites$CI_End_Date_clean > ymd('2024-12-31')] <- NA
 sites$CI_End_Year <- year(sites$CI_End_Date_clean)
 table(is.na(sites$CI_End_Year))
 
 sites$ID <- 1:nrow(sites)
-write_csv(select(sites, CI_ID, ID), 'data/avoided_emissions/site_ID_key.csv')
-saveRDS(sites, 'data/avoided_emissions/sites.RDS')
+write_csv(dplyr::select(sites, CI_ID, ID), 'data/avoided_emissions/site_ID_key_added_FY2024.csv')
+saveRDS(sites, 'data/avoided_emissions/sites_FY2024.RDS')
 
-# Check for overlaps
-# intersections <- foreach (year in c(2019, 2019)) %do% {
-#     these_sites <- sites_cea[(!sites$area_cea_lt_100ha) & (sites$data_year == 2018), ]
-#     return st_intersects(these_sites, these_sites)
-# }
